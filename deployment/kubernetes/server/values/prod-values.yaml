@@ -5,7 +5,7 @@ app:
 
 # Development domain - change to your assigned domain
 domain: lol.melander.dev
-path: 
+path: /
 
 env: prod
 
