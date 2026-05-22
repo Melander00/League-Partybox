@@ -1,0 +1,57 @@
+when:
+  - event: push
+    branch: main
+    path: 
+    - 'server/**' # only run when files in subdir are changed, useful for monorepo.
+    - '!kubernetes/**' # only run when files in subdir are changed, useful for monorepo.
+
+variables:
+  - &image_name 'league-partybox-server' # CHANGE THIS
+  - &values_file 'deployment/kubernetes/server/values/prod-values.yaml'
+
+steps:
+  - name: build-server
+    image: moby/buildkit:master-rootless
+    privileged: true
+    environment:
+      HARBOR_USERNAME:
+        from_secret: docker_username 
+      HARBOR_PASSWORD:
+        from_secret: docker_password
+      IMAGE_NAME: *image_name
+      IMAGE_TAG: ${CI_COMMIT_SHA}
+    commands:
+      - mkdir $HOME/.docker
+      - echo "{\"auths\":{\"harbor.melander.dev\":{\"username\":\"$HARBOR_USERNAME\",\"password\":\"$HARBOR_PASSWORD\"}}}" > $HOME/.docker/config.json
+
+      - cd server # need to cd into subdir where dockerfile is
+      - buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=. --local dockerfile=. --output type=image,name=harbor.melander.dev/library/$IMAGE_NAME:$IMAGE_TAG,push=true
+
+  - name: update-argocd-values
+    image: alpine/git
+    environment:
+      GIT_TOKEN:
+        from_secret: git_token
+      IMAGE_TAG: ${CI_COMMIT_SHA}
+      VALUES_FILE: *values_file
+    commands:
+      # Configure git
+      - git config --global user.email "ci@git.melander.dev"
+      - git config --global user.name "woodpecker-ci"
+
+      # Make sure we're up to date
+      - git pull origin main
+
+      # Update the values file
+      - |
+        sed -i "s/tag:.*/tag: \"${CI_COMMIT_SHA}\"/" $VALUES_FILE
+
+      # Commit only if changed
+      - git add $VALUES_FILE
+      - |
+        if ! git diff --cached --quiet; then
+          git commit -m "Update server image to $IMAGE_TAG"
+          git push origin main
+        else
+          echo "No changes to commit"
+        fi

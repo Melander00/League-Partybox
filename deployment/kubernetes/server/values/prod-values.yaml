@@ -1,0 +1,27 @@
+app:
+  name: server
+  replicas: 1
+  port: 3000
+
+# Development domain - change to your assigned domain
+domain: lol.melander.dev
+path: 
+
+env: prod
+
+postgres:
+  database: r3e
+
+  username: r3e
+
+  existingSecret: postgres-secret
+  passwordKey: password
+
+  host: r3e-db
+
+  port: 5432
+
+# Container image
+image:
+  repository: harbor.melander.dev/library/league-partybox-server
+  tag: ""
