@@ -6,7 +6,8 @@ export const Channels = {
     SUBSCRIBE: "subscribe",
     UNSUBSCRIBE: "unsubscribe",
 
-    SET_PARTY_ID: "set-party-id"
+    SET_PARTY_ID: "set-party-id",
+    PING: "ping",
 }
 
 

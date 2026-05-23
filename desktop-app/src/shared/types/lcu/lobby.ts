@@ -66,3 +66,8 @@ export interface SummonerInfo {
 export interface ChampionInfo {
     
 }
+
+export interface LobbyMemberStatus {
+    ping: number,
+    connected: boolean,
+}
