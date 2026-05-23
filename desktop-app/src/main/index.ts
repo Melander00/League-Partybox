@@ -1,74 +1,127 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { electronApp, is, optimizer } from "@electron-toolkit/utils"
+import { Channels, Log } from "@shared/index"
+import { app, BrowserWindow, ipcMain, shell } from "electron"
+import { join } from "path"
+import icon from "../../resources/icon.png?asset"
+import { getConfig, loadConfig, saveConfig, ScreenPosition } from "./config"
+import { initLCU } from "./lcu"
+import { clampWindowBounds } from "./util"
+import { initWebsocket } from "./ws"
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+let logWindow: BrowserWindow
+
+function createWindow(screen: ScreenPosition) {
+
+    const bounds = clampWindowBounds(screen)
+
+    const mainWindow = new BrowserWindow({
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y,
+        fullscreen: bounds.fullScreen,
+        show: false,
+        autoHideMenuBar: true,
+        ...(process.platform === "linux" ? { icon } : {}),
+        webPreferences: {
+            preload: join(__dirname, "../preload/index.js"),
+            sandbox: false
+        }
+    })
+
+    mainWindow.on("ready-to-show", () => {
+        mainWindow.show()
+    })
+
+    mainWindow.webContents.setWindowOpenHandler((details) => {
+        shell.openExternal(details.url)
+        return { action: "deny" }
+    })
+
+    if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+        mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"])
+    } else {
+        mainWindow.loadFile(join(__dirname, "../renderer/index.html"))
     }
-  })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+    return mainWindow
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+const logQueue: Log[] = []
+let loaded = false
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
+export function logToWindow(level: string, text: string) {
+    if(!loaded) {
+        logQueue.push({
+            type: level,
+            text,
+            time: Date.now()
+        })
+        return
+    }
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+    sendToLogWindow({
+        type: level,
+        text,
+        time: Date.now()
+    })
 
-  createWindow()
+}
 
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+function sendToLogWindow(log: Log) {
+    logWindow.webContents.send(Channels.LOADING_LOG, log)
+}
+
+app.whenReady().then(async () => {
+    electronApp.setAppUserModelId("com.electron")
+
+    app.on("browser-window-created", (_, window) => {
+        optimizer.watchWindowShortcuts(window)
+    })
+
+    const config = await loadConfig()
+
+    logWindow = createWindow(config.loadingScreen)
+
+    logWindow.on("close", async () => {
+        if(!logWindow) return
+
+        const config = getConfig()
+
+        const pos = logWindow.getPosition()
+        const size = logWindow.getSize()
+        const isFullscreen = logWindow.isFullScreen()
+
+        config.loadingScreen = {
+            x: pos[0],
+            y: pos[1],
+            width: size[0],
+            height: size[1],
+            fullScreen: isFullscreen
+        }
+
+        await saveConfig(config)
+    })
+
+    ipcMain.on(Channels.LOADING_LOADED, () => {
+        loaded = true
+        for(const log of logQueue) {
+            sendToLogWindow(log)
+        }
+        logQueue.length = 0
+    })
+
+    initLCU()
+    initWebsocket()
+
+
+    app.on("activate", function () {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow(config.loadingScreen)
+    })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+        app.quit()
+    }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
