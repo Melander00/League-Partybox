@@ -4,6 +4,8 @@ export function setDDragonVersion(ver: string) {
     version = ver
 }
 
+const baseURL = new URL("https://ddragon.leagueoflegends.com/")
+
 export async function loadDDragonVersion() {
     const res = await fetch("https://ddragon.leagueoflegends.com/api/versions.json")
     if(res.ok) {
@@ -15,3 +17,9 @@ export async function loadDDragonVersion() {
         }
     }
 }
+
+
+
+
+
+export const summonerIcon = (icon: number) => new URL(`cdn/${version}/img/profileicon/${icon}.png`,baseURL).toString()
