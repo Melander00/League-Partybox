@@ -25,6 +25,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@reduxjs/toolkit": "^2.12.0",
     "electron-updater": "^6.3.9",
+    "lru-cache": "^11.5.0",
     "react-error-boundary": "^6.1.1",
     "react-redux": "^9.3.0",
     "ws": "^8.20.1"
