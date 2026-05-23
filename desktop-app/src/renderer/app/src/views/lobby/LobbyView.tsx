@@ -1,6 +1,6 @@
 import { summonerIcon } from "@app/lib/ddragon/ddragon"
 import { cacheGetRequest } from "@app/lib/lcu/lcu"
-import { setSummonerInfo } from "@app/store/features/lobbySlice"
+import { isMe, setSummonerInfo } from "@app/store/features/lobbySlice"
 import { useAppDispatch, useAppSelector } from "@app/store/hooks"
 import { LobbyMember } from "@shared/types/lcu/lobby"
 import { useEffect } from "react"
@@ -33,6 +33,8 @@ function Member({ member }: MemberProps) {
 
     const summoner = useAppSelector(state => state.lobby.summoners[member.summonerId])
 
+    const me = isMe(member.summonerId)
+
     useEffect(() => {
 
         cacheGetRequest("/lol-summoner/v2/summoners/puuid/"+member.puuid).then(data => {
@@ -59,7 +61,7 @@ function Member({ member }: MemberProps) {
         <>
             <div className={styles.member}>
                 <img src={summonerIcon(member.summonerIconId)} />
-                <span>{summoner?.gameName}</span>
+                <span>{me ? "(You) " : ""}{summoner?.gameName}</span>
             </div>
         </>
     )
