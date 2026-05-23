@@ -1,4 +1,5 @@
 import { destroyApp, openApp } from "@main/app";
+import { emitMessage } from "@main/ws";
 import { Channels, LogType } from "@shared/index";
 import { ipcMain } from "electron";
 import { logToWindow } from "..";
@@ -12,6 +13,51 @@ let api: LCUApi
 lcu.on("connect", creds => {
     logToWindow(LogType.INFO, "Detected LoL client. Opening app...")
     api = new LCUApi(creds)
+
+    api.request({
+        method: "get",
+        endpoint: "/lol-summoner/v1/current-summoner"
+    }).then(async res => {
+
+        if(res.ok) {
+            const data = await res.json()
+
+            if(data.summonerId) {   
+                emitMessage("me", data.summonerId)
+            }
+        }
+
+    })
+
+    api.request({
+        method: "get",
+        endpoint: "/lol-gameflow/v1/gameflow-phase"
+    }).then(async res => {
+
+        if(res.ok) {
+            const data = await res.json()
+            
+            if(data === "Lobby") {
+
+                api.request({
+                    method: "get",
+                    endpoint: "/lol-lobby/v2/lobby"
+                }).then(async res => {
+
+                    if(res.ok) {
+                        const data = await res.json()
+
+                        if(data.partyId) {   
+                            emitMessage("party-id", data.partyId)
+                        }
+                    }
+
+                })
+
+            }
+        }
+
+    })
 
     openApp("lcu")
 })
