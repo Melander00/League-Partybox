@@ -1,4 +1,6 @@
+// lobby.ts
 import { Server, Socket } from "socket.io";
+import { z } from "zod";
 
 type Member = {
     socket: Socket;
@@ -6,90 +8,297 @@ type Member = {
     partyId: string;
 };
 
+enum MatchPhase {
+    WAITING = "WAITING",
+    PICKING = "PICKING",
+    FINISHED = "FINISHED",
+}
+
+const PICK_RATE_LIMIT_MS = Number(process.env.PICK_RATE_LIMIT_MS ?? 1000);
+
+const START_RATE_LIMIT_MS = Number(process.env.START_RATE_LIMIT_MS ?? 5000);
+
+const pickChampionSchema = z.object({
+    championId: z.number(),
+    targetSocketId: z.string(),
+});
+
+const getPickableIdsSchema = z.object({
+    targetId: z.number(),
+});
+
 export default class Lobby {
     members = new Map<string, Member>();
+
     summonerSockets = new Map<number, Socket>();
+
+    // pickerSocketId -> targetSocketId
+    pickAssignments = new Map<string, string>();
+
+    // socket.id -> timestamp
+    pickRateLimitMap = new Map<string, number>();
+
+    // socket.id -> timestamp
+    startRateLimitMap = new Map<string, number>();
 
     partyId: string;
     io: Server;
 
-    hasShuffled = false;
-    pickingOrder: Member[] = []
+    phase: MatchPhase = MatchPhase.WAITING;
+
+    hasStartedQueue = false;
+
+    pickingOrder: Member[] = [];
+
+    lastActivity = Date.now();
 
     constructor(partyId: string, io: Server) {
         this.partyId = partyId;
         this.io = io;
     }
 
+    touch() {
+        this.lastActivity = Date.now();
+    }
+
+    isEmpty() {
+        return this.members.size === 0;
+    }
+
+    getMember(socketId: string) {
+        return this.members.get(socketId);
+    }
+
     addMember(member: Member) {
+        this.touch();
+
         this.members.set(member.socket.id, member);
+
         this.summonerSockets.set(member.summonerId, member.socket);
 
         this.addListeners(member);
     }
 
+    removeMember(socketId: string) {
+        const member = this.members.get(socketId);
+
+        if (!member) return;
+
+        this.touch();
+
+        this.members.delete(socketId);
+
+        this.summonerSockets.delete(member.summonerId);
+
+        this.pickAssignments.delete(socketId);
+
+        for (const [picker, target] of this.pickAssignments.entries()) {
+            if (target === socketId) {
+                this.pickAssignments.delete(picker);
+            }
+        }
+
+        member.socket.leave(this.partyId);
+
+        this.resetMatch();
+    }
+
+    destroy() {
+        this.members.clear();
+
+        this.summonerSockets.clear();
+
+        this.pickAssignments.clear();
+
+        this.pickRateLimitMap.clear();
+
+        this.startRateLimitMap.clear();
+    }
+
+    resetMatch() {
+        this.phase = MatchPhase.WAITING;
+
+        this.hasStartedQueue = false;
+
+        this.pickAssignments.clear();
+
+        this.pickingOrder = [];
+
+        this.io.to(this.partyId).emit("match-reset");
+    }
+
+    isRateLimited(map: Map<string, number>, socketId: string, limitMs: number) {
+        const now = Date.now();
+
+        const last = map.get(socketId);
+
+        if (last && now - last < limitMs) {
+            return true;
+        }
+
+        map.set(socketId, now);
+
+        return false;
+    }
+
     addListeners(member: Member) {
         const socket = member.socket;
 
-        socket.on("get-pickable-ids", ({ targetId }) => {
+        // avoid duplicate listeners
+        socket.removeAllListeners("get-pickable-ids");
+        socket.removeAllListeners("pick-champion");
+        socket.removeAllListeners("started-queue");
+
+        socket.on("get-pickable-ids", (payload) => {
+            this.touch();
+
+            const parsed = getPickableIdsSchema.safeParse(payload);
+
+            if (!parsed.success) return;
+
+            const { targetId } = parsed.data;
+
             const forwardSocket = this.summonerSockets.get(targetId);
+
             if (!forwardSocket) return;
 
             const sender = this.members.get(socket.id);
+
             if (!sender) return;
 
             forwardSocket.once("return-pickable-ids", (ids) => {
                 socket.emit("return-pickable-ids", {
                     summonerId: targetId,
-                    ids: ids,
+                    ids,
                 });
             });
 
             forwardSocket.emit("get-pickable-ids", sender.summonerId);
         });
 
-        socket.on("pick-champion", ({ championId, targetId }) => {
-            const forwardSocket = this.summonerSockets.get(targetId);
-            if (!forwardSocket) return;
+        socket.on("pick-champion", (payload) => {
+            this.touch();
 
-            const sender = this.members.get(socket.id);
-            if (!sender) return;
+            if (this.phase !== MatchPhase.PICKING) {
+                return;
+            }
 
-            forwardSocket.emit("pick-champion", {
-                sender: sender.summonerId,
+            if (this.isRateLimited(this.pickRateLimitMap, socket.id, PICK_RATE_LIMIT_MS)) {
+                return;
+            }
+
+            const parsed = pickChampionSchema.safeParse(payload);
+
+            if (!parsed.success) return;
+
+            const { championId, targetSocketId } = parsed.data;
+
+            const allowedTarget = this.pickAssignments.get(socket.id);
+
+            // SECURITY CHECK
+            if (allowedTarget !== targetSocketId) {
+                return;
+            }
+
+            const targetMember = this.members.get(targetSocketId);
+
+            if (!targetMember) return;
+
+            targetMember.socket.emit("pick-champion", {
+                sender: member.summonerId,
                 championId,
+            });
+        });
+
+        socket.on("started-queue", () => {
+            this.touch();
+
+            if (this.isRateLimited(this.startRateLimitMap, socket.id, START_RATE_LIMIT_MS)) {
+                return;
+            }
+
+            // only process once
+            if (this.hasStartedQueue) {
+                return;
+            }
+
+            this.hasStartedQueue = true;
+
+            this.startGame();
+        });
+
+        socket.on("get-to-pick-for", () => {
+            this.touch();
+
+            if (
+                this.isRateLimited(
+                    this.startRateLimitMap,
+                    socket.id,
+                    START_RATE_LIMIT_MS
+                )
+            ) {
+                return;
+            }
+
+            if (this.phase !== MatchPhase.PICKING) {
+                return;
+            }
+
+            const targetSocketId =
+                this.pickAssignments.get(socket.id);
+
+            if (!targetSocketId) {
+                return;
+            }
+
+            const targetMember =
+                this.members.get(targetSocketId);
+
+            if (!targetMember) {
+                return;
+            }
+
+            socket.emit("you-pick-for", {
+                summonerId: targetMember.summonerId,
+                socketId: targetMember.socket.id,
             });
         });
     }
 
-    shuffle() {
-        if (this.hasShuffled) return;
-        this.hasShuffled = true;
+    startGame() {
+        this.phase = MatchPhase.PICKING;
+
+        this.pickAssignments.clear();
 
         const shuffled = Array.from(this.members.values());
-        shuffle(shuffled)
 
-        for(let i = 0; i < shuffled.length; i++) {
-            const curr = shuffled[i]
-            const next = shuffled[(i+1) % shuffled.length]
+        shuffle(shuffled);
 
-            curr.socket.emit("you-pick-for", next.summonerId)
+        for (let i = 0; i < shuffled.length; i++) {
+            const curr = shuffled[i];
+
+            const next = shuffled[(i + 1) % shuffled.length];
+
+            this.pickAssignments.set(curr.socket.id, next.socket.id);
+
+            curr.socket.emit("you-pick-for", {
+                summonerId: next.summonerId,
+                socketId: next.socket.id,
+            });
         }
 
-        this.pickingOrder = shuffled
+        this.pickingOrder = shuffled;
     }
 }
 
 function shuffle(array: any[]) {
     let currentIndex = array.length;
 
-    // While there remain elements to shuffle...
-    while (currentIndex != 0) {
-        // Pick a remaining element...
-        let randomIndex = Math.floor(Math.random() * currentIndex);
+    while (currentIndex !== 0) {
+        const randomIndex = Math.floor(Math.random() * currentIndex);
+
         currentIndex--;
 
-        // And swap it with the current element.
         [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
     }
 }

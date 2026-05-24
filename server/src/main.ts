@@ -1,70 +1,124 @@
-import cors from "cors"
-import express from "express"
-import { Server, Socket } from "socket.io"
-import Lobby from "./lobby"
+// main.ts
+import cors from "cors";
+import express from "express";
+import { Server, Socket } from "socket.io";
+import Lobby from "./lobby";
 
-const app = express()
+const app = express();
 
-app.use(cors())
+app.use(cors());
 
 const server = app.listen(3000, () => {
-    console.log("Listening on port 3000") 
-})
+    console.log("Listening on port 3000");
+});
 
 const io = new Server(server, {
     cors: {
-        origin: "*"
+        origin: "*",
+    },
+});
+
+const LOBBY_TIMEOUT_MS = Number(process.env.LOBBY_TIMEOUT_MS ?? 1000 * 60 * 30);
+
+const sumIdMap = new Map<number, Socket>();
+const socketToSumIdMap = new Map<string, number>();
+
+const lobbyMap = new Map<string, Lobby>();
+
+function removeSocketFromAllLobbies(socket: Socket, exceptPartyId?: string) {
+    for (const [partyId, lobby] of lobbyMap.entries()) {
+        if (exceptPartyId && partyId === exceptPartyId) continue;
+
+        lobby.removeMember(socket.id);
+
+        if (lobby.isEmpty()) {
+            lobby.destroy();
+            lobbyMap.delete(partyId);
+        }
     }
-})
+}
 
-const sumIdMap = new Map<number, Socket>()
-const socketToSumIdMap = new Map<Socket, number>()
-const partyIdMap = new Map<Socket, string>()
+setInterval(() => {
+    const now = Date.now();
 
-const lobbyMap = new Map<string, Lobby>()
+    for (const [partyId, lobby] of lobbyMap.entries()) {
+        if (now - lobby.lastActivity > LOBBY_TIMEOUT_MS) {
+            console.log(`Destroying inactive lobby ${partyId}`);
 
-io.on("connection", socket => {
+            lobby.destroy();
+            lobbyMap.delete(partyId);
+        }
+    }
+}, 60_000);
+
+io.on("connection", (socket) => {
     socket.on("ping", (callback) => {
-        callback()
-    })
+        callback();
+    });
 
-    socket.on("latency", ping => {
-        if(!partyIdMap.has(socket)) return;
-        const partyId = partyIdMap.get(socket)
-        if(!partyId) return;
-        
-        if(!socketToSumIdMap.has(socket)) return
-        const sumId = socketToSumIdMap.get(socket)
-        if(!sumId) return;
+    socket.on("latency", (ping) => {
+        const summonerId = socketToSumIdMap.get(socket.id);
+        if (!summonerId) return;
 
-        socket.to(partyId).emit("latency", {
-            id: sumId,
-            ping: ping
-        })
-    })
+        for (const lobby of lobbyMap.values()) {
+            const member = lobby.getMember(socket.id);
+            if (!member) continue;
 
-    socket.on("me", (summonerId) => {
-        sumIdMap.set(summonerId, socket)
-        socketToSumIdMap.set(socket, summonerId)
-    })
+            lobby.touch();
 
-    socket.on("party-id", id => {
-        let lobby = lobbyMap.get(id)
-        if(!lobby) {
-            lobby = new Lobby(id, io)
-            lobbyMap.set(id, lobby)
+            socket.to(lobby.partyId).emit("latency", {
+                id: summonerId,
+                ping,
+            });
+
+            break;
+        }
+    });
+
+    socket.on("me", (summonerId: number) => {
+        sumIdMap.set(summonerId, socket);
+        socketToSumIdMap.set(socket.id, summonerId);
+    });
+
+    socket.on("party-id", (partyId: string) => {
+        removeSocketFromAllLobbies(socket, partyId);
+
+        let lobby = lobbyMap.get(partyId);
+
+        if (!lobby) {
+            lobby = new Lobby(partyId, io);
+            lobbyMap.set(partyId, lobby);
         }
 
-        const summonerId = socketToSumIdMap.get(socket)
-        if(summonerId) {
-            lobby.addMember({
-                socket,
-                summonerId,
-                partyId: id
-            })
+        const summonerId = socketToSumIdMap.get(socket.id);
+
+        if (!summonerId) {
+            console.log("Socket tried joining without summonerId");
+            return;
         }
 
-        partyIdMap.set(socket, id)
-        socket.join(id)
-    })
-})
+        lobby.addMember({
+            socket,
+            summonerId,
+            partyId,
+        });
+
+        socket.join(partyId);
+
+        console.log(`Socket ${socket.id} joined lobby ${partyId}`);
+    });
+
+    socket.on("disconnect", () => {
+        const summonerId = socketToSumIdMap.get(socket.id);
+
+        if (summonerId) {
+            sumIdMap.delete(summonerId);
+        }
+
+        socketToSumIdMap.delete(socket.id);
+
+        removeSocketFromAllLobbies(socket);
+
+        console.log(`Socket disconnected ${socket.id}`);
+    });
+});
