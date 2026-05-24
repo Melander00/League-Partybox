@@ -39,6 +39,7 @@ export default class LCUApi {
     request(opt: RequestOptions) {
 
         return fetch(new URL(opt.endpoint, this.baseUrl), {
+            method: opt.method,
             headers: this.headers,
             body: JSON.stringify(opt.data)
         })

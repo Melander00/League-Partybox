@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, shell } from "electron"
 import { join } from "path"
 import icon from "../../resources/icon.png?asset"
 import { getConfig, loadConfig, saveConfig, ScreenPosition } from "./config"
+import { initIPC } from "./ipc"
 import { initLCU } from "./lcu"
 import { clampWindowBounds } from "./util"
 import { initWebsocket } from "./ws"
@@ -80,6 +81,8 @@ app.whenReady().then(async () => {
     })
 
     const config = await loadConfig()
+
+    initIPC()
 
     logWindow = createWindow(config.loadingScreen)
 

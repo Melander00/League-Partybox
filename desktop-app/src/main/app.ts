@@ -106,3 +106,11 @@ export function destroyApp(caller: string) {
 export function getAppWindow() {
     return appWindow;
 }
+
+export function sendToAppWindow(channel: string, data: any) {
+    if(!appWindow) {
+        return;
+    } 
+
+    appWindow.webContents.send(channel, data)
+}

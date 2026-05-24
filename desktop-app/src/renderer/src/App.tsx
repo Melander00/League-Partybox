@@ -88,7 +88,7 @@ function LogComponent({
             `${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}`    
             }</span>
             <span>{meta.text}</span>
-            <span>{log.text}</span>
+            <span>{typeof log.text === "string" ? log.text : JSON.stringify(log.text)}</span>
 
         </div>
 

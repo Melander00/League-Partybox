@@ -2,10 +2,14 @@ import type { Action, PayloadAction, ThunkAction } from '@reduxjs/toolkit'
 import { combineReducers, configureStore } from '@reduxjs/toolkit'
 import gameflowSlice from "./features/gameflowSlice"
 import lobbySlice from './features/lobbySlice'
+import pickSlice from './features/pickSlice'
+import sessionSlice from './features/sessionSlice'
 
 const appReducer = combineReducers({
     lobby: lobbySlice,
-    gameflow: gameflowSlice
+    gameflow: gameflowSlice,
+    pick: pickSlice,
+    session: sessionSlice
 })
 
 export type AppReducerReturn = ReturnType<typeof appReducer>

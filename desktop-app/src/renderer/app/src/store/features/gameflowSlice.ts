@@ -1,19 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { Phase } from "@shared/index";
 
-const Phases = [
-    "None",
-    "Lobby",
-    "Matchmaking",
-    "ReadyCheck",
-    "ChampSelect",
-    "GameStart",
-    "InProgress",
-    "WaitingForStats",
-    "PreEndOfGame",
-    "EndOfGame",
-] as const
-
-export type Phase = typeof Phases[number]
 
 export interface GameflowState {
     phase: Phase

@@ -7,7 +7,7 @@ export async function request(opt: RequestOptions) {
 
 export async function getRequest(endpoint: string) {
     return request({
-        method: "get",
+        method: "GET",
         endpoint: endpoint
     })
 }

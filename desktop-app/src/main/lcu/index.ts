@@ -1,6 +1,6 @@
 import { destroyApp, openApp } from "@main/app";
 import { emitMessage } from "@main/ws";
-import { Channels, LogType } from "@shared/index";
+import { Channels, LogType, RequestOptions } from "@shared/index";
 import { ipcMain } from "electron";
 import { logToWindow } from "..";
 import LCUApi from "./lcuAPI";
@@ -16,7 +16,7 @@ lcu.on("connect", creds => {
 
     api.ws.once("open", () => {
         api.request({
-            method: "get",
+            method: "GET",
             endpoint: "/lol-summoner/v1/current-summoner"
         }).then(async res => {
 
@@ -31,7 +31,7 @@ lcu.on("connect", creds => {
         })
 
         api.request({
-            method: "get",
+            method: "GET",
             endpoint: "/lol-gameflow/v1/gameflow-phase"
         }).then(async res => {
 
@@ -41,7 +41,7 @@ lcu.on("connect", creds => {
                 if(data === "Lobby") {
 
                     api.request({
-                        method: "get",
+                        method: "GET",
                         endpoint: "/lol-lobby/v2/lobby"
                     }).then(async res => {
 
@@ -76,11 +76,19 @@ export function initLCU() {
 
     lcu.start()
 
-    ipcMain.handle(Channels.REQUEST, async (_ev, data) => {
-        if(api) {
-            return await (await api.request(data)).json()
+    ipcMain.handle("raw", async (ev, data) => {
+        const res = await api.request(data)
+        
+        if(res.ok) {
+            console.log(res)
         }
-        return null;
+
+        console.error(res)
+
+    })
+
+    ipcMain.handle(Channels.REQUEST, async (_ev, data) => {
+        return await request(data)
     })
 
     ipcMain.handle(Channels.SUBSCRIBE, (ev, endpoint) => {
@@ -130,4 +138,27 @@ export function initLCU() {
 
 export function getApi() {
     return api;
+}
+
+export async function request<T>(opt: RequestOptions) {
+    if(!api) return null
+
+    const res = await api.request(opt)
+    if(res.ok) {
+        if(res.headers.get("content-type") === "application/json" && parseInt(res.headers.get("content-length") ?? "0") > 0) {
+            return await res.json() as T
+        }
+        return true;
+    }
+
+    return null
+}
+
+export function subscribe<T>(topic, callback: (data: T) => void) {
+    if(!api) return false;
+
+    if(!api.ws) return false
+
+    const unsubscribe = api.ws.subscribe(topic, callback)
+    return unsubscribe
 }
