@@ -1,5 +1,4 @@
-import { LogType, RequestOptions } from "@shared/index";
-import { logToWindow } from "..";
+import { RequestOptions } from "@shared/index";
 import { LCUCredentials } from "./lcuConnector";
 import LeagueWS from "./lcuWS";
 
@@ -27,7 +26,7 @@ export default class LCUApi {
             "authorization": `Basic ${Buffer.from(`${this.creds.username}:${this.creds.password}`).toBase64()}`
         }
 
-        logToWindow(LogType.INFO, "Trying to connect to LoL websocket server.")
+        
         this.ws = new LeagueWS(`wss://riot:${creds.password}@${creds.address}:${creds.port}/`)
         // this.ws.on("open", () => {  
         //     logToWindow(LogType.INFO, "Connected to LoL websocket server.")

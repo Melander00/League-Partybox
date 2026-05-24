@@ -14,52 +14,54 @@ lcu.on("connect", creds => {
     logToWindow(LogType.INFO, "Detected LoL client. Opening app...")
     api = new LCUApi(creds)
 
-    api.request({
-        method: "get",
-        endpoint: "/lol-summoner/v1/current-summoner"
-    }).then(async res => {
+    api.ws.once("open", () => {
+        api.request({
+            method: "get",
+            endpoint: "/lol-summoner/v1/current-summoner"
+        }).then(async res => {
 
-        if(res.ok) {
-            const data = await res.json()
+            if(res.ok) {
+                const data = await res.json()
 
-            if(data.summonerId) {   
-                emitMessage("me", data.summonerId)
+                if(data.summonerId) {   
+                    emitMessage("me", data.summonerId)
+                }
             }
-        }
 
-    })
+        })
 
-    api.request({
-        method: "get",
-        endpoint: "/lol-gameflow/v1/gameflow-phase"
-    }).then(async res => {
+        api.request({
+            method: "get",
+            endpoint: "/lol-gameflow/v1/gameflow-phase"
+        }).then(async res => {
 
-        if(res.ok) {
-            const data = await res.json()
-            
-            if(data === "Lobby") {
+            if(res.ok) {
+                const data = await res.json()
+                
+                if(data === "Lobby") {
 
-                api.request({
-                    method: "get",
-                    endpoint: "/lol-lobby/v2/lobby"
-                }).then(async res => {
+                    api.request({
+                        method: "get",
+                        endpoint: "/lol-lobby/v2/lobby"
+                    }).then(async res => {
 
-                    if(res.ok) {
-                        const data = await res.json()
+                        if(res.ok) {
+                            const data = await res.json()
 
-                        if(data.partyId) {   
-                            emitMessage("party-id", data.partyId)
+                            if(data.partyId) {   
+                                emitMessage("party-id", data.partyId)
+                            }
                         }
-                    }
 
-                })
+                    })
 
+                }
             }
-        }
 
+        })
+        openApp("lcu")
     })
 
-    openApp("lcu")
 })
 
 lcu.on("disconnect", () => {

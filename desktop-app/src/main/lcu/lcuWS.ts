@@ -25,7 +25,7 @@ export default class LeagueWS extends EventEmitter {
     private readonly url: string;
     private readonly protocol = "wamp";
 
-    private reconnectDelay = 5000;
+    private reconnectDelay = 10000;
     private shouldReconnect = true;
     private reconnectTimeout: NodeJS.Timeout | null = null;
 
@@ -41,6 +41,7 @@ export default class LeagueWS extends EventEmitter {
     }
 
     private connect() {
+        logToWindow(LogType.INFO, "LoL WS connecting...")
         this.socket = new ws(this.url, this.protocol);
 
         this.socket.on("open", this._onOpen.bind(this));
@@ -118,6 +119,15 @@ export default class LeagueWS extends EventEmitter {
         this.sendMessage(type, message);
     }
 
+    private reconnect() {
+        if(!this.shouldReconnect) return
+
+        logToWindow(LogType.INFO, "LoL WS Reconnecting in " + Math.round(this.reconnectDelay / 1000) + "...");
+        this.reconnectTimeout = setTimeout(() => {
+            this.connect();
+        }, this.reconnectDelay);
+    }
+
     private sendMessage(type: ValueOf<typeof TYPES>, message: any) {
         if (!this.isOpen()) {
             return;
@@ -150,20 +160,17 @@ export default class LeagueWS extends EventEmitter {
 
         this.emit("close", code, reason);
 
-        if (!this.shouldReconnect) {
-            return;
-        }
-
-        this.reconnectTimeout = setTimeout(() => {
-            logToWindow(LogType.INFO, "LoL WS Reconnecting...");
-            this.connect();
-        }, this.reconnectDelay);
+        this.reconnect()
     }
 
     private _onError(error: Error) {
         logToWindow(LogType.ERROR, "LoL WS Error: " + error.message);
+        console.log(error)
+        // this.emit("error", error);
 
-        this.emit("error", error);
+        this.session = null;
+
+        // this.reconnect()
     }
 
     private _onMessage(message: ws.RawData) {
