@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: desktop-app
+productName: League Partybox
 directories:
   buildResources: build
 files:
@@ -12,7 +12,11 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: desktop-app
+  executableName: league-partybox
+  signAndEditExecutable: true
+  target:
+    - nsis
+    - portable
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
