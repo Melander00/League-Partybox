@@ -1,5 +1,5 @@
+import { ipcRenderer } from "@app/lib/ipc/ipcRenderer";
 import type { IpcRendererListener } from "@electron-toolkit/preload";
-import { ipcRenderer } from "@renderer/lib/ipcRenderer";
 import { useEffect } from "react";
 
 export function useIpc(channel: string, listener: IpcRendererListener) {

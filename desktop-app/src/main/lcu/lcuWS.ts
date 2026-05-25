@@ -119,6 +119,10 @@ export default class LeagueWS extends EventEmitter {
         this.sendMessage(type, message);
     }
 
+    getSession() {
+        return this.session;
+    }
+
     private reconnect() {
         if(!this.shouldReconnect) return
 

@@ -131,12 +131,8 @@ function App(): React.JSX.Element {
         <NotificationsView />
 
         <div className={styles.container}>
-
-            <div>
-                <LobbyView/>
-                <ChampionsView/>
-            </div>
-
+            <LobbyView/>
+            <ChampionsView/>
         </div>
         </>
     )

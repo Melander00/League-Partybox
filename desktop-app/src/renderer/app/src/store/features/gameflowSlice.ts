@@ -7,7 +7,7 @@ export interface GameflowState {
 }
 
 const initialState: GameflowState = {
-    phase: "None"
+    phase: "None" // Todo: set this to None
 }
 
 const gameflowSlice = createSlice({

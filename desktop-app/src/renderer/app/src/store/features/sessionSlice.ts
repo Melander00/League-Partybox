@@ -45,6 +45,12 @@ export interface SessionState {
     // isSpectating: false
     localPlayerCellId: number
     // lockedEventIndex: -1
+    myTeam: {
+        assignedPosition: string,
+        championId: number,
+        championPickIntent: number,
+        summonerId: number
+    }[]
     // // myTeam
     // // :
     // // [{…}]
@@ -67,14 +73,15 @@ export interface SessionState {
 
 const initialState: SessionState = {
     actions: [],
-    localPlayerCellId: -1
+    localPlayerCellId: -1,
+    myTeam: []
 }
 
 const sessionState = createSlice({
     initialState,
     name: "session",
     reducers: {
-        setSession: (state, action: PayloadAction<SessionState>) => {
+        setSession: (_state, action: PayloadAction<SessionState>) => {
             return action.payload
         },
         setSessionActions: (state, action: PayloadAction<SessionAction[][]>) => {

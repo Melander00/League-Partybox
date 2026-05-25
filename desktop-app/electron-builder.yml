@@ -13,6 +13,10 @@ asarUnpack:
   - resources/**
 win:
   executableName: league-partybox
+  signAndEditExecutable: true
+  target:
+    - nsis
+    - portable
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

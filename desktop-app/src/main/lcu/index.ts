@@ -76,7 +76,7 @@ export function initLCU() {
 
     lcu.start()
 
-    ipcMain.handle("raw", async (ev, data) => {
+    ipcMain.handle("raw", async (_ev, data) => {
         const res = await api.request(data)
         
         if(res.ok) {

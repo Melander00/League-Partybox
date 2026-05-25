@@ -10,8 +10,7 @@ export interface LobbyState {
     status: {[id: number]: LobbyMemberStatus},
 }
 
-const initialState: LobbyState = {
-    members: [
+const temp = [
   {
     "allowedChangeActivity": false,
     "allowedInviteOthers": true,
@@ -90,11 +89,20 @@ const initialState: LobbyState = {
     "teamId": 0,
     "thirdPositionPreference": null
   }
-],
+]
+
+const initialState: LobbyState = {
+    // members: temp,
+    members: [],
     summoners: {},
     champions: {},
-    status: {},
-    myId: 3621574233163744
+    status: {
+        // 3684542063535424: {
+        //     connected: true,
+        //     ping: 27
+        // }
+    },
+    myId: -1
 }
 
 export const lobbySlice = createSlice({

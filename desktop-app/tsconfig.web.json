@@ -23,6 +23,7 @@
       "@shared/*": [
         "./src/shared/*"
       ]
-    }
+    },
+    "noUnusedLocals": false
   }
 }

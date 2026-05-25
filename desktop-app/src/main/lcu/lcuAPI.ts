@@ -23,7 +23,7 @@ export default class LCUApi {
         this.headers = {
             "accept": "application/json",
             "content-type": "application/json",
-            "authorization": `Basic ${Buffer.from(`${this.creds.username}:${this.creds.password}`).toBase64()}`
+            "authorization": `Basic ${Buffer.from(`${this.creds.username}:${this.creds.password}`).toString("base64")}`
         }
 
         

@@ -2,7 +2,7 @@ import { summonerIcon } from "@app/lib/ddragon/ddragon"
 import { cacheGetRequest } from "@app/lib/lcu/lcu"
 import { isMe, setSummonerInfo } from "@app/store/features/lobbySlice"
 import { useAppDispatch, useAppSelector } from "@app/store/hooks"
-import { LobbyMember } from "@shared/types/lcu/lobby"
+import { LobbyMember, LobbyMemberStatus } from "@shared/types/lcu/lobby"
 import { useEffect } from "react"
 import styles from "./lobby.module.css"
 
@@ -32,8 +32,10 @@ function Member({ member }: MemberProps) {
     const dispatch = useAppDispatch()
 
     const summoner = useAppSelector(state => state.lobby.summoners[member.summonerId])
+    const status = useAppSelector(state => state.lobby.status[member.summonerId])
 
     const me = isMe(member.summonerId)
+    const target = useAppSelector(state => state.pick.pickForId.summonerId === member.summonerId)
 
     useEffect(() => {
 
@@ -57,12 +59,37 @@ function Member({ member }: MemberProps) {
 
     }, [member.puuid])
 
+
+
     return (
         <>
-            <div className={styles.member}>
+            <div className={[styles.member, target ? styles.target : ""].join(" ")}>
+                <Status status={status ?? {connected: me, ping: 0}} />
                 <img src={summonerIcon(member.summonerIconId)} />
-                <span>{me ? "(You) " : ""}{summoner?.gameName}</span>
+                <span>{summoner?.gameName}</span>
             </div>
         </>
     )
+}
+
+
+function Status({status}: {status: LobbyMemberStatus}) {
+
+    if(status === undefined) return null;
+
+    return(
+        <>
+        
+        <div className={styles.status} title={`${status.ping} ms`}
+            style={{
+                background: status.connected ? "#52FF29" : "#FF282E"
+            }}
+        >
+
+            &nbsp;
+
+        </div>
+        
+        </>
+    )    
 }
