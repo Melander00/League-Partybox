@@ -195,12 +195,16 @@ export default class Lobby {
 
             const allowedTarget = this.pickAssignments.get(socket.id);
 
+            let targetMember = this.members.get(targetSocketId);
+
             // SECURITY CHECK
             if (allowedTarget !== targetSocketId) {
+                console.log("Tried to pick for invalid target")
+                if(allowedTarget)
+                    targetMember = this.members.get(allowedTarget)
                 return;
             }
 
-            const targetMember = this.members.get(targetSocketId);
 
             if (!targetMember) return;
 
@@ -263,6 +267,12 @@ export default class Lobby {
                 socketId: targetMember.socket.id,
             });
         });
+
+        socket.on("reset-game", () => {
+            this.touch()
+
+            this.resetMatch()
+        })
     }
 
     startGame() {

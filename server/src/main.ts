@@ -105,7 +105,7 @@ io.on("connection", (socket) => {
 
         socket.join(partyId);
 
-        console.log(`Socket ${socket.id} joined lobby ${partyId}`);
+        // console.log(`Socket ${socket.id} joined lobby ${partyId}`);
     });
 
     socket.on("disconnect", () => {
@@ -119,6 +119,6 @@ io.on("connection", (socket) => {
 
         removeSocketFromAllLobbies(socket);
 
-        console.log(`Socket disconnected ${socket.id}`);
+        // console.log(`Socket disconnected ${socket.id}`);
     });
 });
