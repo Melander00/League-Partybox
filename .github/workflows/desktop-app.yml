@@ -19,11 +19,11 @@ jobs:
           node-version: 24
 
       - name: Install Dependencies
-        run: | 
-          cd desktop-app
-          npm install
+        working-directory: desktop-app
+        run: npm install
 
       - name: build-win
+        working-directory: desktop-app
         run: npm run build:win
 
       - name: release
@@ -31,10 +31,10 @@ jobs:
         with:
           draft: true
           files: |
-            dist/*.exe
-            dist/*.msi
-            dist/*.zip
-            dist/*.yml
-            dist/*.blockmap
+            desktop-app/dist/*.exe
+            desktop-app/dist/*.msi
+            desktop-app/dist/*.zip
+            desktop-app/dist/*.yml
+            desktop-app/dist/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
