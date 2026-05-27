@@ -1,6 +1,7 @@
 import { electronApp, is, optimizer } from "@electron-toolkit/utils"
-import { Channels, Log } from "@shared/index"
+import { Channels, Log, LogType } from "@shared/index"
 import { app, BrowserWindow, ipcMain, shell } from "electron"
+import { autoUpdater } from "electron-updater"
 import { join } from "path"
 import icon from "../../resources/icon.png?asset"
 import { getConfig, loadConfig, saveConfig, ScreenPosition } from "./config"
@@ -12,7 +13,6 @@ import { initWebsocket } from "./ws"
 let logWindow: BrowserWindow
 
 function createWindow(screen: ScreenPosition) {
-
     const bounds = clampWindowBounds(screen)
 
     const mainWindow = new BrowserWindow({
@@ -52,7 +52,7 @@ const logQueue: Log[] = []
 let loaded = false
 
 export function logToWindow(level: string, text: string) {
-    if(!loaded) {
+    if (!loaded) {
         logQueue.push({
             type: level,
             text,
@@ -66,17 +66,18 @@ export function logToWindow(level: string, text: string) {
         text,
         time: Date.now()
     })
-
 }
 
 function sendToLogWindow(log: Log) {
-    if(!logWindow) return;
-    if(logWindow.isDestroyed()) return
+    if (!logWindow) return
+    if (logWindow.isDestroyed()) return
     logWindow.webContents.send(Channels.LOADING_LOG, log)
 }
 
 app.whenReady().then(async () => {
-    electronApp.setAppUserModelId("com.electron")
+    autoUpdater.checkForUpdatesAndNotify()
+
+    electronApp.setAppUserModelId("se.melander")
 
     app.on("browser-window-created", (_, window) => {
         optimizer.watchWindowShortcuts(window)
@@ -88,8 +89,27 @@ app.whenReady().then(async () => {
 
     logWindow = createWindow(config.loadingScreen)
 
+    autoUpdater.on("checking-for-update", () => {
+        logToWindow(LogType.INFO, "Checking for update...")
+    })
+    autoUpdater.on("update-available", (info) => {
+        logToWindow(LogType.INFO, `Found new version ${info.version}, downloading...`)
+    })
+    autoUpdater.on("update-not-available", (_info) => {
+        logToWindow(LogType.INFO, "No update found.")
+    })
+    autoUpdater.on("error", (err) => {
+        logToWindow(LogType.ERROR, "Error in auto-updater. " + err.message)
+    })
+    autoUpdater.on("update-downloaded", (_info) => {
+        logToWindow(LogType.INFO, "Update downloaded. Quitting and installing in 5...")
+        setTimeout(() => {
+            autoUpdater.quitAndInstall()
+        }, 5000)
+    })
+
     logWindow.on("close", async () => {
-        if(!logWindow) return
+        if (!logWindow) return
 
         const config = getConfig()
 
@@ -110,7 +130,7 @@ app.whenReady().then(async () => {
 
     ipcMain.on(Channels.LOADING_LOADED, () => {
         loaded = true
-        for(const log of logQueue) {
+        for (const log of logQueue) {
             sendToLogWindow(log)
         }
         logQueue.length = 0
@@ -118,7 +138,6 @@ app.whenReady().then(async () => {
 
     initLCU()
     initWebsocket()
-
 
     app.on("activate", function () {
         if (BrowserWindow.getAllWindows().length === 0) createWindow(config.loadingScreen)

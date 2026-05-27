@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: se.melander.league-partybox
 productName: League Partybox
 directories:
   buildResources: build
@@ -22,6 +22,8 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+portable:
+  artifactName: ${name}.${ext}
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -43,7 +45,8 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: Melander00
+  repo: League-Partybox
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

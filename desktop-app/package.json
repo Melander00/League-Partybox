@@ -1,10 +1,10 @@
 {
-  "name": "desktop-app",
+  "name": "league-partybox",
   "version": "1.0.1",
-  "description": "An Electron application with React and TypeScript",
+  "description": "A League of Legends party application.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Samuel Melander",
+  "homepage": "https://github.com/Melander00/League-Partybox",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -18,7 +18,8 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "dist:win": "electron-vite build && electron-builder --win --publish never"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
