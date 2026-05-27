@@ -1,4 +1,5 @@
 // lobby.ts
+import crypto from "crypto";
 import { Server, Socket } from "socket.io";
 import { z } from "zod";
 
@@ -14,9 +15,23 @@ enum MatchPhase {
     FINISHED = "FINISHED",
 }
 
-const PICK_RATE_LIMIT_MS = Number(process.env.PICK_RATE_LIMIT_MS ?? 1000);
+type PendingPickableRequest = {
+    requesterSocketId: string;
+    targetId: number;
+    timeout: NodeJS.Timeout;
+};
 
-const START_RATE_LIMIT_MS = Number(process.env.START_RATE_LIMIT_MS ?? 5000);
+const PICK_RATE_LIMIT_MS = Number(
+    process.env.PICK_RATE_LIMIT_MS ?? 1000
+);
+
+const START_RATE_LIMIT_MS = Number(
+    process.env.START_RATE_LIMIT_MS ?? 5000
+);
+
+const REQUEST_TIMEOUT_MS = Number(
+    process.env.REQUEST_TIMEOUT_MS ?? 10000
+);
 
 const pickChampionSchema = z.object({
     championId: z.number(),
@@ -27,24 +42,33 @@ const getPickableIdsSchema = z.object({
     targetId: z.number(),
 });
 
+const returnPickableIdsSchema = z.object({
+    requestId: z.string(),
+    ids: z.array(z.number()),
+});
+
 export default class Lobby {
     members = new Map<string, Member>();
 
     summonerSockets = new Map<number, Socket>();
 
-    // pickerSocketId -> targetSocketId
     pickAssignments = new Map<string, string>();
 
-    // socket.id -> timestamp
-    pickRateLimitMap = new Map<string, number>();
+    pendingPickableRequests =
+        new Map<string, PendingPickableRequest>();
 
-    // socket.id -> timestamp
-    startRateLimitMap = new Map<string, number>();
+    pickRateLimitMap =
+        new Map<string, number>();
+
+    startRateLimitMap =
+        new Map<string, number>();
 
     partyId: string;
+
     io: Server;
 
-    phase: MatchPhase = MatchPhase.WAITING;
+    phase: MatchPhase =
+        MatchPhase.WAITING;
 
     hasStartedQueue = false;
 
@@ -52,8 +76,12 @@ export default class Lobby {
 
     lastActivity = Date.now();
 
-    constructor(partyId: string, io: Server) {
+    constructor(
+        partyId: string,
+        io: Server
+    ) {
         this.partyId = partyId;
+
         this.io = io;
     }
 
@@ -72,15 +100,22 @@ export default class Lobby {
     addMember(member: Member) {
         this.touch();
 
-        this.members.set(member.socket.id, member);
+        this.members.set(
+            member.socket.id,
+            member
+        );
 
-        this.summonerSockets.set(member.summonerId, member.socket);
+        this.summonerSockets.set(
+            member.summonerId,
+            member.socket
+        );
 
         this.addListeners(member);
     }
 
     removeMember(socketId: string) {
-        const member = this.members.get(socketId);
+        const member =
+            this.members.get(socketId);
 
         if (!member) return;
 
@@ -88,13 +123,38 @@ export default class Lobby {
 
         this.members.delete(socketId);
 
-        this.summonerSockets.delete(member.summonerId);
+        this.summonerSockets.delete(
+            member.summonerId
+        );
 
-        this.pickAssignments.delete(socketId);
+        this.pickAssignments.delete(
+            socketId
+        );
 
-        for (const [picker, target] of this.pickAssignments.entries()) {
+        for (const [
+            picker,
+            target,
+        ] of this.pickAssignments.entries()) {
             if (target === socketId) {
-                this.pickAssignments.delete(picker);
+                this.pickAssignments.delete(
+                    picker
+                );
+            }
+        }
+
+        for (const [
+            requestId,
+            request,
+        ] of this.pendingPickableRequests.entries()) {
+            if (
+                request.requesterSocketId ===
+                socketId
+            ) {
+                clearTimeout(request.timeout);
+
+                this.pendingPickableRequests.delete(
+                    requestId
+                );
             }
         }
 
@@ -104,11 +164,18 @@ export default class Lobby {
     }
 
     destroy() {
+        for (const request of this
+            .pendingPickableRequests.values()) {
+            clearTimeout(request.timeout);
+        }
+
         this.members.clear();
 
         this.summonerSockets.clear();
 
         this.pickAssignments.clear();
+
+        this.pendingPickableRequests.clear();
 
         this.pickRateLimitMap.clear();
 
@@ -124,15 +191,24 @@ export default class Lobby {
 
         this.pickingOrder = [];
 
-        this.io.to(this.partyId).emit("match-reset");
+        this.io.to(this.partyId).emit(
+            "match-reset"
+        );
     }
 
-    isRateLimited(map: Map<string, number>, socketId: string, limitMs: number) {
+    isRateLimited(
+        map: Map<string, number>,
+        socketId: string,
+        limitMs: number
+    ) {
         const now = Date.now();
 
         const last = map.get(socketId);
 
-        if (last && now - last < limitMs) {
+        if (
+            last &&
+            now - last < limitMs
+        ) {
             return true;
         }
 
@@ -144,171 +220,376 @@ export default class Lobby {
     addListeners(member: Member) {
         const socket = member.socket;
 
-        // avoid duplicate listeners
-        socket.removeAllListeners("get-pickable-ids");
-        socket.removeAllListeners("pick-champion");
-        socket.removeAllListeners("started-queue");
+        socket.removeAllListeners(
+            "get-pickable-ids"
+        );
 
-        socket.on("get-pickable-ids", (payload) => {
-            this.touch();
+        socket.removeAllListeners(
+            "return-pickable-ids"
+        );
 
-            const parsed = getPickableIdsSchema.safeParse(payload);
+        socket.removeAllListeners(
+            "pick-champion"
+        );
 
-            if (!parsed.success) return;
+        socket.removeAllListeners(
+            "started-queue"
+        );
 
-            const { targetId } = parsed.data;
+        socket.removeAllListeners(
+            "get-to-pick-for"
+        );
 
-            const forwardSocket = this.summonerSockets.get(targetId);
+        socket.removeAllListeners(
+            "reset-game"
+        );
 
-            if (!forwardSocket) return;
+        socket.on(
+            "get-pickable-ids",
+            (payload) => {
+                this.touch();
 
-            const sender = this.members.get(socket.id);
+                const parsed =
+                    getPickableIdsSchema.safeParse(
+                        payload
+                    );
 
-            if (!sender) return;
+                if (!parsed.success) {
+                    return;
+                }
 
-            forwardSocket.once("return-pickable-ids", (ids) => {
-                socket.emit("return-pickable-ids", {
-                    summonerId: targetId,
+                const { targetId } =
+                    parsed.data;
+
+                const forwardSocket =
+                    this.summonerSockets.get(
+                        targetId
+                    );
+
+                if (!forwardSocket) {
+                    return;
+                }
+
+                const sender =
+                    this.members.get(
+                        socket.id
+                    );
+
+                if (!sender) {
+                    return;
+                }
+
+                const requestId =
+                    crypto.randomUUID();
+
+                const timeout =
+                    setTimeout(() => {
+                        this.pendingPickableRequests.delete(
+                            requestId
+                        );
+                    }, REQUEST_TIMEOUT_MS);
+
+                this.pendingPickableRequests.set(
+                    requestId,
+                    {
+                        requesterSocketId:
+                            socket.id,
+                        targetId,
+                        timeout,
+                    }
+                );
+
+                forwardSocket.emit(
+                    "get-pickable-ids",
+                    {
+                        requestId,
+                        requesterId:
+                            sender.summonerId,
+                    }
+                );
+            }
+        );
+
+        socket.on(
+            "return-pickable-ids",
+            (payload) => {
+                this.touch();
+
+                const parsed =
+                    returnPickableIdsSchema.safeParse(
+                        payload
+                    );
+
+                if (!parsed.success) {
+                    return;
+                }
+
+                const {
+                    requestId,
                     ids,
-                });
-            });
+                } = parsed.data;
 
-            forwardSocket.emit("get-pickable-ids", sender.summonerId);
-        });
+                const request =
+                    this.pendingPickableRequests.get(
+                        requestId
+                    );
 
-        socket.on("pick-champion", (payload) => {
-            this.touch();
+                if (!request) {
+                    return;
+                }
 
-            if (this.phase !== MatchPhase.PICKING) {
-                return;
+                clearTimeout(
+                    request.timeout
+                );
+
+                this.pendingPickableRequests.delete(
+                    requestId
+                );
+
+                const requester =
+                    this.members.get(
+                        request.requesterSocketId
+                    );
+
+                if (!requester) {
+                    return;
+                }
+
+                requester.socket.emit(
+                    "return-pickable-ids",
+                    {
+                        summonerId:
+                            request.targetId,
+                        ids,
+                    }
+                );
             }
+        );
 
-            if (this.isRateLimited(this.pickRateLimitMap, socket.id, PICK_RATE_LIMIT_MS)) {
-                return;
+        socket.on(
+            "pick-champion",
+            (payload) => {
+                this.touch();
+
+                if (
+                    this.phase !==
+                    MatchPhase.PICKING
+                ) {
+                    return;
+                }
+
+                if (
+                    this.isRateLimited(
+                        this.pickRateLimitMap,
+                        socket.id,
+                        PICK_RATE_LIMIT_MS
+                    )
+                ) {
+                    return;
+                }
+
+                const parsed =
+                    pickChampionSchema.safeParse(
+                        payload
+                    );
+
+                if (!parsed.success) {
+                    return;
+                }
+
+                const {
+                    championId,
+                    targetSocketId,
+                } = parsed.data;
+
+                const allowedTarget =
+                    this.pickAssignments.get(
+                        socket.id
+                    );
+
+                if (
+                    allowedTarget !==
+                    targetSocketId
+                ) {
+                    console.log(
+                        "Invalid pick target"
+                    );
+
+                    return;
+                }
+
+                const targetMember =
+                    this.members.get(
+                        targetSocketId
+                    );
+
+                if (!targetMember) {
+                    return;
+                }
+
+                targetMember.socket.emit(
+                    "pick-champion",
+                    {
+                        sender:
+                            member.summonerId,
+                        championId,
+                    }
+                );
             }
+        );
 
-            const parsed = pickChampionSchema.safeParse(payload);
+        socket.on(
+            "started-queue",
+            () => {
+                this.touch();
 
-            if (!parsed.success) return;
+                if (
+                    this.isRateLimited(
+                        this.startRateLimitMap,
+                        socket.id,
+                        START_RATE_LIMIT_MS
+                    )
+                ) {
+                    return;
+                }
 
-            const { championId, targetSocketId } = parsed.data;
+                if (
+                    this.hasStartedQueue
+                ) {
+                    return;
+                }
 
-            const allowedTarget = this.pickAssignments.get(socket.id);
+                this.hasStartedQueue =
+                    true;
 
-            let targetMember = this.members.get(targetSocketId);
-
-            // SECURITY CHECK
-            if (allowedTarget !== targetSocketId) {
-                console.log("Tried to pick for invalid target")
-                if(allowedTarget)
-                    targetMember = this.members.get(allowedTarget)
-                return;
+                this.startGame();
             }
+        );
 
+        socket.on(
+            "get-to-pick-for",
+            () => {
+                this.touch();
 
-            if (!targetMember) return;
+                if (
+                    this.phase !==
+                    MatchPhase.PICKING
+                ) {
+                    return;
+                }
 
-            targetMember.socket.emit("pick-champion", {
-                sender: member.summonerId,
-                championId,
-            });
-        });
+                const targetSocketId =
+                    this.pickAssignments.get(
+                        socket.id
+                    );
 
-        socket.on("started-queue", () => {
-            this.touch();
+                if (
+                    !targetSocketId
+                ) {
+                    return;
+                }
 
-            if (this.isRateLimited(this.startRateLimitMap, socket.id, START_RATE_LIMIT_MS)) {
-                return;
+                const targetMember =
+                    this.members.get(
+                        targetSocketId
+                    );
+
+                if (!targetMember) {
+                    return;
+                }
+
+                socket.emit(
+                    "you-pick-for",
+                    {
+                        summonerId:
+                            targetMember.summonerId,
+                        socketId:
+                            targetMember
+                                .socket.id,
+                    }
+                );
             }
+        );
 
-            // only process once
-            if (this.hasStartedQueue) {
-                return;
+        socket.on(
+            "reset-game",
+            () => {
+                this.touch();
+
+                this.resetMatch();
             }
-
-            this.hasStartedQueue = true;
-
-            this.startGame();
-        });
-
-        socket.on("get-to-pick-for", () => {
-            this.touch();
-
-            if (
-                this.isRateLimited(
-                    this.startRateLimitMap,
-                    socket.id,
-                    START_RATE_LIMIT_MS
-                )
-            ) {
-                return;
-            }
-
-            if (this.phase !== MatchPhase.PICKING) {
-                return;
-            }
-
-            const targetSocketId =
-                this.pickAssignments.get(socket.id);
-
-            if (!targetSocketId) {
-                return;
-            }
-
-            const targetMember =
-                this.members.get(targetSocketId);
-
-            if (!targetMember) {
-                return;
-            }
-
-            socket.emit("you-pick-for", {
-                summonerId: targetMember.summonerId,
-                socketId: targetMember.socket.id,
-            });
-        });
-
-        socket.on("reset-game", () => {
-            this.touch()
-
-            this.resetMatch()
-        })
+        );
     }
 
     startGame() {
-        this.phase = MatchPhase.PICKING;
+        this.phase =
+            MatchPhase.PICKING;
 
         this.pickAssignments.clear();
 
-        const shuffled = Array.from(this.members.values());
+        const shuffled =
+            Array.from(
+                this.members.values()
+            );
 
         shuffle(shuffled);
 
-        for (let i = 0; i < shuffled.length; i++) {
-            const curr = shuffled[i];
+        for (
+            let i = 0;
+            i < shuffled.length;
+            i++
+        ) {
+            const curr =
+                shuffled[i];
 
-            const next = shuffled[(i + 1) % shuffled.length];
+            const next =
+                shuffled[
+                    (i + 1) %
+                        shuffled.length
+                ];
 
-            this.pickAssignments.set(curr.socket.id, next.socket.id);
+            this.pickAssignments.set(
+                curr.socket.id,
+                next.socket.id
+            );
 
-            curr.socket.emit("you-pick-for", {
-                summonerId: next.summonerId,
-                socketId: next.socket.id,
-            });
+            curr.socket.emit(
+                "you-pick-for",
+                {
+                    summonerId:
+                        next.summonerId,
+                    socketId:
+                        next.socket.id,
+                }
+            );
         }
 
-        this.pickingOrder = shuffled;
+        this.pickingOrder =
+            shuffled;
     }
 }
 
 function shuffle(array: any[]) {
-    let currentIndex = array.length;
+    let currentIndex =
+        array.length;
 
-    while (currentIndex !== 0) {
-        const randomIndex = Math.floor(Math.random() * currentIndex);
+    while (
+        currentIndex !== 0
+    ) {
+        const randomIndex =
+            Math.floor(
+                Math.random() *
+                    currentIndex
+            );
 
         currentIndex--;
 
-        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+        [
+            array[currentIndex],
+            array[randomIndex],
+        ] = [
+            array[randomIndex],
+            array[currentIndex],
+        ];
     }
 }
