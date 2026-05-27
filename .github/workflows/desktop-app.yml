@@ -5,6 +5,9 @@ on:
     tags:
       - v*.*.*
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: windows-latest
@@ -27,14 +30,13 @@ jobs:
         run: npm run build:win
 
       - name: release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
+          working-directory: desktop-app
           draft: true
           files: |
-            desktop-app/dist/*.exe
-            desktop-app/dist/*.msi
-            desktop-app/dist/*.zip
-            desktop-app/dist/*.yml
-            desktop-app/dist/*.blockmap
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
