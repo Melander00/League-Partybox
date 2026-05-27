@@ -24,4 +24,4 @@ postgres:
 # Container image
 image:
   repository: harbor.melander.dev/library/league-partybox-server
-  tag: "71173f378195ee3697542650b0865ac780ef0df0"
+  tag: "2bec2f63f86b39dc74e6c758d2335e604d4c38d7"
