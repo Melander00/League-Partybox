@@ -28,6 +28,11 @@ export interface SessionState {
     // // bans
     // // :
     // // {myTeamBans: Array(0), numBans: 0, theirTeamBans: Array(0)}
+    bans: {
+        myTeams: number[],
+        numBans: number,
+        theirTeamBans: number[],
+    }
     // benchChampions: []
     // benchEnabled: false
     // boostableSkinCount: 0
@@ -74,7 +79,12 @@ export interface SessionState {
 const initialState: SessionState = {
     actions: [],
     localPlayerCellId: -1,
-    myTeam: []
+    myTeam: [],
+    bans: {
+        myTeams: [],
+        numBans: 0,
+        theirTeamBans: [],
+    }
 }
 
 const sessionState = createSlice({

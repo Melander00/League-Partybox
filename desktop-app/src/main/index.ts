@@ -70,6 +70,8 @@ export function logToWindow(level: string, text: string) {
 }
 
 function sendToLogWindow(log: Log) {
+    if(!logWindow) return;
+    if(logWindow.isDestroyed()) return
     logWindow.webContents.send(Channels.LOADING_LOG, log)
 }
 

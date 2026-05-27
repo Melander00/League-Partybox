@@ -107,7 +107,7 @@ export function getAppWindow() {
     return appWindow;
 }
 
-export function sendToAppWindow(channel: string, data: any) {
+export function sendToAppWindow(channel: string, data?: any) {
     if(!appWindow) {
         return;
     } 

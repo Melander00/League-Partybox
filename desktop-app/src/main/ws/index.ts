@@ -34,18 +34,21 @@ export function initWebsocket() {
         sendToAppWindow(Channels.PING, data)
     })
 
-    socket.on("get-pickable-ids", async () => {
+    socket.on("get-pickable-ids", async ({ requestId }) => {
 
         const ids = await request({
             method: "GET",
             endpoint: "/lol-champ-select/v1/pickable-champion-ids"
         })
         
-        socket.emit("return-pickable-ids", ids)
+        socket.emit("return-pickable-ids", {
+            requestId,
+            ids
+        })
 
     })
 
-    socket.on("return-pickable-ids", ids => {
+    socket.on("return-pickable-ids", ({ ids }) => {
         sendToAppWindow(Channels.PICKABLE_CHAMP_IDS, ids)
     })
     
@@ -94,6 +97,10 @@ export function initWebsocket() {
         sendToAppWindow(Channels.YOU_PICK_FOR, {summonerId, socketId})
 
         logToWindow(LogType.INFO, `Pick for ${summonerId}`)
+    })
+
+    socket.on("match-reset", () => {
+        sendToAppWindow(Channels.RESET_MATCH)
     })
 
 

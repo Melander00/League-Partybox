@@ -1,18 +1,18 @@
-import { Channels, LogType, Phase } from "@shared/index";
+import { Channels, Phase } from "@shared/index";
 import { ipcMain } from "electron";
-import { logToWindow } from ".";
 import { emitMessage } from "./ws";
 
 export function initIPC() {
 
     ipcMain.on(Channels.SET_PARTY_ID, (_ev, partyId) => {
-        logToWindow(LogType.INFO, "Joined party " + partyId)
         emitMessage("party-id", partyId)
     })
 
     ipcMain.on(Channels.PHASE, (_ev, phase: Phase) => {
         if(phase === "Matchmaking") {
             emitMessage("started-queue")
+        } else if(phase === "Lobby") {
+            emitMessage("reset-game")
         }
     })
 

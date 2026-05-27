@@ -104,13 +104,17 @@ const pickSlice = createSlice({
         },
         setPickableChamps: (state, action: PayloadAction<number[]>) => {
             state.pickableChampIds = action.payload
+        },
+        resetPickState: (_state) => {
+            return initialState;
         }
     } 
 })
 
 export const {
     setPickFor,
-    setPickableChamps
+    setPickableChamps,
+    resetPickState
 } = pickSlice.actions;
 export default pickSlice.reducer;
 
