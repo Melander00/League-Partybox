@@ -2,6 +2,7 @@ import { ipcRenderer } from "@renderer/lib/ipcRenderer"
 import { useIpc } from "@renderer/lib/useIpc"
 import { Channels, Phase } from "@shared/index"
 import { useEffect } from "react"
+import { ErrorBoundary } from "react-error-boundary"
 import styles from "./app.module.css"
 import { loadDDragonVersion } from "./lib/ddragon/ddragon"
 import { cacheGetRequest, request } from "./lib/lcu/lcu"
@@ -89,7 +90,7 @@ function App(): React.JSX.Element {
     }) 
 
     useIpc(Channels.PICKABLE_CHAMP_IDS, (_ev, data) => {
-        dispatch(setPickableChamps(data.ids))
+        dispatch(setPickableChamps(data))
     })
 
     useIpc(Channels.RESET_MATCH, () => {
@@ -164,8 +165,18 @@ function App(): React.JSX.Element {
         <NotificationsView />
 
         <div className={styles.container}>
-            <LobbyView/>
-            <ChampionsView/>
+            <ErrorBoundary fallbackRender={error => (<>
+                <span>Error occured in lobby</span>
+                <pre>{JSON.stringify(error.error, null, 2)}</pre>
+            </>)}>
+                <LobbyView/>
+            </ErrorBoundary>
+            <ErrorBoundary fallbackRender={error => (<>
+                <span>Error occured in champ select</span>
+                <pre>{JSON.stringify(error.error, null, 2)}</pre>
+            </>)}>
+                <ChampionsView/>
+            </ErrorBoundary>
         </div>
         </>
     )

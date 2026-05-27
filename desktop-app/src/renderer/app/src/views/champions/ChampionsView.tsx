@@ -30,8 +30,8 @@ export default function ChampionsView() {
         if(!champInfoMap) return;
         return pickableChamps
             .filter(id => {
-                if(bans.myTeams.includes(id)) return false
-                if(bans.theirTeamBans.includes(id)) return false
+                if(bans?.myTeams?.includes(id)) return false
+                if(bans?.theirTeamBans?.includes(id)) return false
                 return true;
             })
             .map(id => ({
@@ -39,7 +39,7 @@ export default function ChampionsView() {
                 info: champInfoMap.get(id)
             }))
             .filter(c => c.info) // remove missing
-    }, [pickableChamps, champInfoMap])
+    }, [pickableChamps, champInfoMap, bans])
 
     const sortedChampions = useMemo(() => {
         if(!champions) return;
