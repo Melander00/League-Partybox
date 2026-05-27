@@ -25,18 +25,24 @@ jobs:
         working-directory: desktop-app
         run: npm install
 
-      - name: build-win
+      - name: Build and Release win
         working-directory: desktop-app
-        run: npm run build:win
-
-      - name: release
-        uses: softprops/action-gh-release@v3
-        with:
-          working_directory: desktop-app
-          draft: true
-          files: |
-            dist/*.exe
-            dist/latest.yml
-            dist/*.blockmap
+        run: npm run dist:win
         env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: build-win
+      #   working-directory: desktop-app
+      #   run: npm run build:win
+
+      # - name: release
+      #   uses: softprops/action-gh-release@v3
+      #   with:
+      #     working_directory: desktop-app
+      #     draft: true
+      #     files: |
+      #       dist/*.exe
+      #       dist/latest.yml
+      #       dist/*.blockmap
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
