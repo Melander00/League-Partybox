@@ -9,7 +9,7 @@ export function initIPC() {
     })
 
     ipcMain.on(Channels.PHASE, (_ev, phase: Phase) => {
-        if(phase === "Matchmaking") {
+        if(phase === "ChampSelect") {
             emitMessage("started-queue")
         } else if(phase === "Lobby") {
             emitMessage("reset-game")

@@ -5,7 +5,7 @@ import { useEffect } from "react"
 import { ErrorBoundary } from "react-error-boundary"
 import styles from "./app.module.css"
 import { loadDDragonVersion } from "./lib/ddragon/ddragon"
-import { cacheGetRequest, request } from "./lib/lcu/lcu"
+import { cacheGetRequest, getRequest, request } from "./lib/lcu/lcu"
 import { useLCU } from "./lib/lcu/useLCU"
 import { setPhase } from "./store/features/gameflowSlice"
 import { setMembers, setMyId, setStatus } from "./store/features/lobbySlice"
@@ -32,19 +32,19 @@ function App(): React.JSX.Element {
 
         ipcRenderer.send(Channels.PHASE, data.data)
 
-        if(data.data === "ChampSelect") {
-            // Race condition for non-matchmaking lobbies
-            setTimeout(() => {
-                const state = store.getState()
-                const forId = state.pick.pickForId.summonerId
+        // if(data.data === "ChampSelect") {
+        //     // Race condition for non-matchmaking lobbies
+        //     setTimeout(() => {
+        //         const state = store.getState()
+        //         const forId = state.pick.pickForId.summonerId
                 
-                console.log(forId)
+        //         console.log(forId)
                 
-                if(forId !== -1) {
-                    ipcRenderer.send(Channels.GET_PICKABLE_CHAMPS, forId)
-                }
-            }, 2000)
-        }
+        //         if(forId !== -1) {
+        //             ipcRenderer.send(Channels.GET_PICKABLE_CHAMPS, forId)
+        //         }
+        //     }, 2000)
+        // }
 
     })
 
@@ -62,17 +62,13 @@ function App(): React.JSX.Element {
             }
             
             if(data.eventType === "Update") {
-                console.log(data)
                 ipcRenderer.send(Channels.SET_PARTY_ID, data.data.partyId)
             }
         }
     })
 
     useLCU("OnJsonApiEvent_lol-champ-select_v1_session", (_ev, data) => {
-
         dispatch(setSession(data.data))
-
-        console.log(data)
     })
 
     useIpc(Channels.PING, (_ev, data) => {
@@ -87,6 +83,7 @@ function App(): React.JSX.Element {
 
     useIpc(Channels.YOU_PICK_FOR, (_ev, {summonerId, socketId}) => {
         dispatch(setPickFor({summonerId, socketId}))
+        ipcRenderer.send(Channels.GET_PICKABLE_CHAMPS, summonerId)
     }) 
 
     useIpc(Channels.PICKABLE_CHAMP_IDS, (_ev, data) => {
@@ -156,6 +153,11 @@ function App(): React.JSX.Element {
         loadDDragonVersion().then(() => { addNotification("DDragon", "Loaded latest ddragon version.", "success") })
         cacheGetRequest("/lol-summoner/v1/current-summoner/account-and-summoner-ids").then(data => {
             dispatch(setMyId(data.summonerId))
+        })
+        getRequest("/lol-lobby/v2/lobby/members").then(data => {
+            if(data) {
+                dispatch(setMembers(data))
+            }
         })
     }, [])
 
