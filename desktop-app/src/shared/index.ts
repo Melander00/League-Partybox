@@ -16,6 +16,7 @@ export const Channels = {
     PICK_CHAMP: "pick-champ",
     GET_PICKABLE_CHAMPS: "get-pickable-champs",
     GOT_PICK_CHAMP: "got-pick-champ",
+    RESET_MATCH: "reset-match",
 }
 
 const Phases = [

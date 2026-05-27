@@ -13,6 +13,8 @@ export default function ChampionsView() {
 
     const isChampSelect = useAppSelector(state => state.gameflow.phase === "ChampSelect")
 
+    const bans = useAppSelector(state => state.session.bans)
+
     const champInfo = useChampionInfoAll()
 
     const champInfoMap = useMemo(() => {
@@ -27,6 +29,11 @@ export default function ChampionsView() {
     const champions = useMemo(() => {
         if(!champInfoMap) return;
         return pickableChamps
+            .filter(id => {
+                if(bans.myTeams.includes(id)) return false
+                if(bans.theirTeamBans.includes(id)) return false
+                return true;
+            })
             .map(id => ({
                 id,
                 info: champInfoMap.get(id)
