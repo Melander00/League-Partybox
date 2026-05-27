@@ -183,6 +183,8 @@ export default class Lobby {
     }
 
     resetMatch() {
+        if(!this.hasStartedQueue) return;
+
         this.phase = MatchPhase.WAITING;
 
         this.hasStartedQueue = false;
