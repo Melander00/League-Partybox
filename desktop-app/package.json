@@ -1,6 +1,6 @@
 {
   "name": "league-partybox",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A League of Legends party application.",
   "main": "./out/main/index.js",
   "author": "Samuel Melander",
