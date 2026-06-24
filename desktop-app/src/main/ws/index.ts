@@ -2,9 +2,10 @@ import { openApp, sendToAppWindow } from "@main/app";
 import { getConfig } from "@main/config";
 import { request } from "@main/lcu";
 import { Channels, LogType } from "@shared/index";
-import { io, Socket } from "socket.io-client";
+import { Manager, Socket } from "socket.io-client";
 import { logToWindow } from "..";
 
+let manager: Manager
 let socket: Socket
 
 type Message = {
@@ -19,7 +20,16 @@ export function initWebsocket() {
 
     const config = getConfig()
 
-    socket = io(config.serverUrl)
+    manager = new Manager(config.serverUrl)
+    socket = manager.socket("/")
+
+    manager.on("reconnect_attempt", attempt => {
+        logToWindow(LogType.INFO, "Attempting to recconect. Try " + attempt)
+    })
+
+    manager.on("error", err => {
+        logToWindow(LogType.ERROR, "Connection error: " + err.message)
+    })
 
     socket.on("connect", () => {
         logToWindow(LogType.INFO, "Connected to server")
@@ -28,6 +38,12 @@ export function initWebsocket() {
         for(const msg of messages) {
             socket.emit(msg.channel, msg.message)
         }
+
+        messages.length = 0
+    })
+
+    socket.on("close", () => {
+        logToWindow(LogType.WARNING, "Lost connection to server.")
     })
 
     socket.on("latency", (data) => {

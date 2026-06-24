@@ -17,7 +17,26 @@ function App(): React.JSX.Element {
         setLogs(e => [...e, log])
     }
 
-    useIpc(Channels.LOADING_LOG, (_ev, data) => {
+    useIpc(Channels.LOADING_LOG, (_ev, data: Log) => {
+
+        if(
+            !(data.text && data.time && data.type)
+            || typeof data.text !== "string"
+            || typeof data.time !== "number"
+            || typeof data.type !== "string" 
+        ) {
+            console.log("Invalid Log:", data)
+
+            addLog({
+                text: "Received invalid log. Check console",
+                time: Date.now(),
+                type: LogType.ERROR
+            })
+
+            return
+        }
+
+
         addLog(data)
     })
 
@@ -75,7 +94,21 @@ function LogComponent({
 }: LogProps) {
 
     const meta = logMapper(log) 
-    const date = new Date(log.time)
+    const date = new Date(log.time || 0)
+
+    let text = log.text
+
+    if(typeof log.text !== "string") {
+        try {
+            text = JSON.stringify(log.text)
+        } catch(e) {
+            if(e instanceof Error) {
+                text = e.message
+                meta.text = "[Internal Error; Check console]"
+                console.log(log)
+            }
+        }
+    }
 
     return(
         <>
@@ -88,7 +121,7 @@ function LogComponent({
             `${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}`    
             }</span>
             <span>{meta.text}</span>
-            <span>{typeof log.text === "string" ? log.text : JSON.stringify(log.text)}</span>
+            <span>{text}</span>
 
         </div>
 

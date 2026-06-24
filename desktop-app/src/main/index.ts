@@ -22,7 +22,7 @@ function createWindow(screen: ScreenPosition) {
         y: bounds.y,
         fullscreen: bounds.fullScreen,
         show: false,
-        autoHideMenuBar: true,
+        // autoHideMenuBar: true,
         ...(process.platform === "linux" ? { icon } : {}),
         webPreferences: {
             preload: join(__dirname, "../preload/index.js"),
@@ -52,14 +52,14 @@ const logQueue: Log[] = []
 let loaded = false
 
 export function logToWindow(level: string, text: string) {
-    if (!loaded) {
+    // if (!loaded) {
         logQueue.push({
             type: level,
             text,
             time: Date.now()
         })
-        return
-    }
+        // return
+    // }
 
     sendToLogWindow({
         type: level,
@@ -133,7 +133,7 @@ app.whenReady().then(async () => {
         for (const log of logQueue) {
             sendToLogWindow(log)
         }
-        logQueue.length = 0
+        // logQueue.length = 0
     })
 
     initLCU()
