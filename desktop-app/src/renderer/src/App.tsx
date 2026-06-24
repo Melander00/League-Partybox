@@ -58,7 +58,7 @@ export default App
 
 function logMapper(log: Log) {
     const obj = {
-        color: "#fbfbfb",
+        color: "var(--text)",
         text: "[Info]"
     }
 
