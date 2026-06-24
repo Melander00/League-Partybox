@@ -1,7 +1,7 @@
-import { destroyApp, openApp } from "@main/app";
+import { openApp } from "@main/app";
 import { emitMessage } from "@main/ws";
 import { Channels, LogType, RequestOptions } from "@shared/index";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { logToWindow } from "..";
 import LCUApi from "./lcuAPI";
 import LCUConnector from "./lcuConnector";
@@ -66,7 +66,8 @@ lcu.on("connect", creds => {
 
 lcu.on("disconnect", () => {
     logToWindow(LogType.WARNING, "LoL client closed.")
-    destroyApp("lcu")
+    // destroyApp("lcu")
+    app.quit()
 }) 
 
 const subscriptions = new Map<number, Map<string, () => void>>()
